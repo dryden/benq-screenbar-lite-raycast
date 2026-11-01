@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./images/benq-screenbar-raycast-round.png" alt="BenQ ScreenBar Lite" width="180" />
+</p>
+
 # BenQ ScreenBar Lite — macOS 原生命令列與 Raycast 控制套件
 
 [English](./README.md) | [繁體中文](./README.zh-TW.md)
@@ -217,3 +221,12 @@ checksum = (0xA7 + B + T + 0xFF + 0x04 + 0x02 + 0xFF) & 0xFF
 ## 📄 授權條款
 
 [MIT License](./LICENSE)
+
+---
+
+## ⚠️ 免責聲明與注意事項 (Disclaimer)
+
+* **非官方專案 (Unofficial Project)**：本專案為獨立開發的第三方開源工具，與明基電通 (BenQ Corporation) 無任何附屬、授權、背書或官方合作關係。「BenQ」與「ScreenBar」皆為該公司之註冊商標。
+* **硬體風險自負 (Use at Your Own Risk)**：本工具透過逆向工程解析之 USB HID 封包直接與燈具微控制器 (MCU) 進行底層通訊。雖然已經過實機測試，但不同硬體批次或韌體版本可能存在差異。使用本腳本控制硬體之風險由使用者自行承擔，開發者不對任何潛在的硬體異常、設定跑掉、韌體損壞或保固失效負責。
+* **異常排除 (Troubleshooting)**：若發送指令後燈具出現無反應或控制異常，請直接拔除 ScreenBar Lite 的 USB 電源線並靜置 5 秒後重新插上，即可重置燈具內部的微控制器狀態。
+

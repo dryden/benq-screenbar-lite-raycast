@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./images/benq-screenbar-raycast-round.png" alt="BenQ ScreenBar Lite" width="180" />
+</p>
+
 # BenQ ScreenBar Lite — Native macOS CLI & Raycast Control
 
 [English](./README.md) | [繁體中文](./README.zh-TW.md)
@@ -217,3 +221,12 @@ If this project saved your BenQ ScreenBar Lite on Apple Silicon, feel free to bu
 ## 📄 License
 
 [MIT License](./LICENSE)
+
+---
+
+## ⚠️ Disclaimer
+
+* **Unofficial Project**: This is an independent, third-party open-source project and is in no way affiliated with, authorized, maintained, sponsored, or endorsed by BenQ Corporation. "BenQ" and "ScreenBar" are registered trademarks of BenQ Corporation.
+* **Use at Your Own Risk**: This tool communicates directly with the lamp's hardware controller via reverse-engineered USB HID payloads. It is provided "AS IS" without warranty of any kind. The author shall not be held liable for any hardware malfunction, erratic behavior, or voided warranty resulting from the use of this software.
+* **Hardware Reset**: If the light bar becomes unresponsive after receiving a command, simply unplug the USB cable, wait 5 seconds, and plug it back in to power-cycle the controller.
+
