@@ -26,35 +26,47 @@ Compared to BenQ's official Qt-based Intel (`x86_64`) app running under Rosetta 
 | **CPU Usage** | `0.3% – 1.5%` (continuous USB polling) | **`0.0%`** (100% kernel event-driven via `CFRunLoop`, zero polling) |
 | **RAM (`phys_footprint`)** | `~120 MB – 180 MB` | **`~7.0 MB` (`7,201 KB`)** |
 | **Disk Size** | `~45 MB` (`.app` bundle + Qt frameworks) | **`~55 KB`** (compiled native binary + shell scripts) |
-| **Circadian Worker** | Not supported | **`0 MB` resident** (triggered by `launchd` once every 15 mins for `~50ms`, then exits) |
+| **Circadian Worker** | Not supported | **`0 MB` resident** (triggered by `launchd` once every hour on the hour for `~50ms`, then exits) |
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Installation
+
+### Requirements
+
+| Requirement | Details |
+| :--- | :--- |
+| **Hardware** | BenQ ScreenBar Lite (`04A5:2500`) connected to the Mac via USB |
+| **OS** | macOS on Apple Silicon (`arm64`) |
+| **Homebrew** | Used to install `hidapitester` ([install Homebrew](https://brew.sh)) |
+| **Xcode Command Line Tools** | Provides `clang` to build the power monitor: `xcode-select --install` |
+| **Raycast** | Optional, only needed for hotkey control ([raycast.com](https://www.raycast.com)) |
 
 ### 1. Clone & Run Installer
 
+> [!IMPORTANT]
+> The LaunchAgents reference the absolute path of this folder. Clone it to a **permanent location** (don't move or delete it afterwards, or re-run `./_install.sh` after moving).
+
 ```bash
-git clone https://github.com/dryden/benq-screenbar-lite-raycast.git /Applications/ScreenBarLite-Raycast
-cd /Applications/ScreenBarLite-Raycast
-chmod +x _install.sh
+git clone https://github.com/dryden/benq-screenbar-lite-raycast.git ~/benq-screenbar-lite
+cd ~/benq-screenbar-lite
 ./_install.sh
 ```
 
 What `_install.sh` does:
 1. Installs [`hidapitester`](https://github.com/todbot/hidapitester) via Homebrew if not already installed.
 2. Compiles [`screenbar-power-monitor.m`](./screenbar-power-monitor.m) into a native binary using system `clang`.
-3. Installs and starts two user `LaunchAgents`:
-   - `com.benq.screenbar-circadian` (updates color temperature every 15 minutes when lamp is ON)
-   - `com.benq.screenbar-power-monitor` (turns lamp OFF on sleep/lock/shutdown and restores on wake)
+3. Installs and starts two user `LaunchAgents` (and removes the legacy `com.benq.*` ones from older versions):
+   - `io.github.dryden.screenbar-circadian` (updates color temperature at the top of every hour when lamp is ON)
+   - `io.github.dryden.screenbar-power-monitor` (turns lamp OFF on sleep/lock/shutdown and restores on wake)
 
-To uninstall the background services at any time, run `./_uninstall.sh`.
+The installer is safe to re-run at any time (e.g. after `git pull`); restarting the services does **not** turn the lamp off.
 
 ### 2. Add to Raycast
 
 1. Open **Raycast** -> **Settings** (`⌘ ,`) -> **Extensions**.
 2. Click **Add More** (`+`) -> **Add Script Directory**.
-3. Select `/Applications/ScreenBarLite-Raycast`.
+3. Select the folder you cloned to (e.g. `~/benq-screenbar-lite`).
 4. Bind your favorite hotkeys to the 7 commands!
 
 | Script File | Raycast Command Title | Description |
@@ -66,6 +78,48 @@ To uninstall the background services at any time, run `./_uninstall.sh`.
 | `screenbar-temp-cooler.sh` | **ScreenBar: Temp Cooler** | Shift color temperature cooler towards `6500K` (pauses Circadian Mode) |
 | `screenbar-toggle-auto.sh` | **ScreenBar: Toggle Auto Mode** | Toggle hardware ambient-light Auto-Dimming sensor |
 | `screenbar-toggle-circadian.sh` | **ScreenBar: Toggle Circadian Mode** | Toggle automatic time-of-day color temperature |
+
+### 3. Verify
+
+```bash
+launchctl list | grep screenbar          # should list the 2 io.github.dryden.* services
+tail -3 /tmp/screenbar-power.log          # should end with "started and connected to WindowServer"
+./screenbar-toggle-power.sh               # the lamp should toggle
+```
+
+Then lock your screen (`⌃⌘Q`): the lamp should turn off, and turn back on when you unlock.
+
+### Update
+
+```bash
+cd ~/benq-screenbar-lite && git pull && ./_install.sh
+```
+
+### Uninstall
+
+```bash
+cd ~/benq-screenbar-lite
+./_uninstall.sh            # stop and remove the background services
+./_uninstall.sh --purge    # ...and also delete ~/.screenbar_lite_state and the logs
+```
+
+Then remove the script directory from Raycast and delete the cloned folder.
+
+### Behavior Notes
+
+- **Circadian Mode vs. Auto Mode:** while hardware Auto-Dimming (`Toggle Auto Mode`) is active, Circadian Mode does not override the lamp.
+- **Manual color temperature** (`Temp Warmer` / `Temp Cooler`) pauses Circadian Mode until you toggle it on again.
+- **State** is stored in `~/.screenbar_lite_state`; logs are in `/tmp/screenbar-power.log` and `/tmp/screenbar-circadian.log`.
+
+### Troubleshooting
+
+| Symptom | Fix |
+| :--- | :--- |
+| `device not responding, is it plugged in?` | Check the USB cable. The lamp must be connected directly or through a data-capable hub. |
+| `device is stuck (FIFO full), unplug and replug the USB cable` | The lamp's MCU is ignoring commands (`C3 1F`). Unplug the USB cable, wait 5 seconds, plug it back in. |
+| `clang not found` during install | Run `xcode-select --install`, then re-run `./_install.sh`. |
+| Lamp doesn't react to sleep / wake | Check `/tmp/screenbar-power.log` and that `launchctl list \| grep screenbar` shows both services. |
+| Raycast doesn't list the commands | Make sure the script directory is added in Raycast settings and the scripts are executable (`chmod +x *.sh`). |
 
 ---
 
@@ -87,21 +141,23 @@ All host-to-device commands are **9 bytes** (including prepend Report ID `0x00`,
 | **Manual Mode** | `sbChangeMode(1)` | `00 A7 FF FF FF 01 02 FF A6` | Switches to manual mode |
 | **Auto Dimming Mode** | `sbChangeMode(2)` | `00 A7 FF 05 FF 02 02 FF AD` | Enables ambient light sensor auto mode |
 | **Favorite Mode** | `sbChangeMode(3)` | `00 A7 FF FF FF 03 02 FF A8` | Loads hardware favorite preset |
-| **Set Brightness & Temp** | `setSBBrightness` / `setSBColorTemp` | `00 A7 <B> <T> FF 04 02 FF <CK>` | `<B>`: `0x01`..`0x0F` (1..15)<br>`<T>`: `0x01`..`0x08` (`2700K`..`6500K`)<br>`<CK>`: Checksum (see below) |
+| **Set Brightness & Temp** | `setSBBrightness` / `setSBColorTemp` | `00 A7 <B> <T> FF 04 02 FF <CK>` | `<B>`: `0x01`..`0x0F` (1..15)<br>`<T>`: `0x01`..`0x08` (hardware: `6500K`..`2700K`, see below)<br>`<CK>`: Checksum (see below) |
 | **Query Device Status** | `getHidDevice` | `00 B3 53 FF FF FF FF FF 01` | Returns 8-byte status Input Report `57 ...` |
 | **Firmware Reset** ⚠️ | `sbFwReset` | `00 A3 04 FF FF FF FF FF A2` | **DO NOT SEND** in normal operation (locks MCU into bootloader mode until USB power cycle) |
 
 #### Color Temperature Index (`<T>`)
+The Index column is the logical index used by the scripts (`1` = warmest). The Hex column is what the lamp actually expects: **hardware index is inverted** (`0x01` = `6500K`, `0x08` = `2700K`), and `send_brightness_temp` converts with `9 - index`.
+
 | Index | Hex | Color Temperature |
 | :---: | :---: | :---: |
-| `1` | `0x01` | `2700K` (Warmest) |
-| `2` | `0x02` | `3000K` |
-| `3` | `0x03` | `3500K` |
-| `4` | `0x04` | `4000K` |
-| `5` | `0x05` | `4500K` |
-| `6` | `0x06` | `5000K` |
-| `7` | `0x07` | `5700K` |
-| `8` | `0x08` | `6500K` (Coolest) |
+| `1` | `0x08` | `2700K` (Warmest) |
+| `2` | `0x07` | `3000K` |
+| `3` | `0x06` | `3500K` |
+| `4` | `0x05` | `4000K` |
+| `5` | `0x04` | `4500K` |
+| `6` | `0x03` | `5000K` |
+| `7` | `0x02` | `5700K` |
+| `8` | `0x01` | `6500K` (Coolest) |
 
 #### Checksum Formula (`<CK>`)
 The final byte (`B7`) is the low 8-bit sum of bytes `B0..B6`:
@@ -119,7 +175,7 @@ Every time the host sends an Output Report (`0xA7` or `0xB3`), the Weltrend MCU 
 
 > [!IMPORTANT]
 > **Always pop the Input Report after sending a command!**
-> If the host only writes Output Reports (`--send-output`) without reading back the Input Report (`--read-input-report 0`), the MCU's internal outgoing FIFO queue fills up after ~6–8 commands, starts returning `C3 1F`, and ignores subsequent commands until the FIFO is drained.
+> If the host only writes Output Reports (`--send-output`) without reading back the Input Report (`--read-input-report 0`), the MCU's internal outgoing FIFO queue fills up after ~6–8 commands, starts returning `C3 1F`, and ignores subsequent commands. Once stuck, only a USB power cycle (unplug / replug) recovers it; the scripts detect `C3 1F` and tell you so.
 >
 > In [`_screenbar_lib.sh`](./_screenbar_lib.sh), every command automatically drains the FIFO:
 > ```bash

@@ -26,35 +26,47 @@
 | **CPU 佔用率** | `0.3% – 1.5%`（背景持續輪詢 USB） | **`0.0%`**（100% 透過 `CFRunLoop` 系統事件驅動，零輪詢） |
 | **實體記憶體 (`phys_footprint`)** | `~120 MB – 180 MB` | **`~7.0 MB` (`7,201 KB`)** |
 | **磁碟佔用大小** | `~45 MB`（`.app` 封裝與 Qt 函式庫） | **`~55 KB`**（編譯後原生執行檔 + Shell 腳本） |
-| **日夜節律排程** | 不支援 | **常駐 `0 MB`**（由 `launchd` 每 15 分鐘觸發執行約 `50ms` 即退出） |
+| **日夜節律排程** | 不支援 | **常駐 `0 MB`**（由 `launchd` 每小時整點觸發執行約 `50ms` 即退出） |
 
 ---
 
-## 🚀 快速安裝
+## 🚀 安裝方式
+
+### 系統需求
+
+| 項目 | 說明 |
+| :--- | :--- |
+| **硬體** | 以 USB 連接到 Mac 的 BenQ ScreenBar Lite（`04A5:2500`） |
+| **作業系統** | Apple Silicon (`arm64`) 的 macOS |
+| **Homebrew** | 用來安裝 `hidapitester`（[安裝 Homebrew](https://brew.sh)） |
+| **Xcode Command Line Tools** | 提供編譯守護程式所需的 `clang`：`xcode-select --install` |
+| **Raycast** | 選用，僅在使用快捷鍵控制時需要（[raycast.com](https://www.raycast.com)） |
 
 ### 1. 下載並執行一鍵安裝腳本
 
+> [!IMPORTANT]
+> LaunchAgents 會記錄本資料夾的絕對路徑，請將專案下載到**固定位置**（之後不要移動或刪除；若移動，請重新執行 `./_install.sh`）。
+
 ```bash
-git clone https://github.com/dryden/benq-screenbar-lite-raycast.git /Applications/ScreenBarLite-Raycast
-cd /Applications/ScreenBarLite-Raycast
-chmod +x _install.sh
+git clone https://github.com/dryden/benq-screenbar-lite-raycast.git ~/benq-screenbar-lite
+cd ~/benq-screenbar-lite
 ./_install.sh
 ```
 
 `_install.sh` 會自動完成以下設定：
 1. 檢查並透過 Homebrew 安裝原生 `arm64` 版的 [`hidapitester`](https://github.com/todbot/hidapitester)。
 2. 使用系統內建的 `clang` 將 [`screenbar-power-monitor.m`](./screenbar-power-monitor.m) 編譯為原生執行檔。
-3. 自動產生並載入兩個使用者層級的 `LaunchAgents`：
-   - `com.benq.screenbar-circadian`（開燈狀態下每 15 分鐘自動依據時段更新色溫）
-   - `com.benq.screenbar-power-monitor`（監聽睡眠、鎖屏與關機事件自動關燈，喚醒時自動開燈）
+3. 自動產生並載入兩個使用者層級的 `LaunchAgents`（同時清除舊版遺留的 `com.benq.*` 服務）：
+   - `io.github.dryden.screenbar-circadian`（開燈狀態下每小時整點自動依據時段更新色溫）
+   - `io.github.dryden.screenbar-power-monitor`（監聽睡眠、鎖屏與關機事件自動關燈，喚醒時自動開燈）
 
-若日後想移除背景服務，隨時可執行 `./_uninstall.sh`。
+安裝腳本可以隨時重複執行（例如 `git pull` 之後），重啟服務**不會**讓燈熄滅。
 
 ### 2. 加入 Raycast
 
 1. 打開 **Raycast** -> **Settings** (`⌘ ,`) -> **Extensions**。
 2. 點選 **Add More** (`+`) -> **Add Script Directory**。
-3. 選擇 `/Applications/ScreenBarLite-Raycast` 資料夾。
+3. 選擇你下載專案的資料夾（例如 `~/benq-screenbar-lite`）。
 4. 為以下 7 個指令綁定順手的快捷鍵即可！
 
 | 腳本檔案 | Raycast 指令名稱 | 功能說明 |
@@ -66,6 +78,48 @@ chmod +x _install.sh
 | `screenbar-temp-cooler.sh` | **ScreenBar: Temp Cooler** | 色溫調冷（往 `6500K` 方向，並自動暫停日夜節律模式） |
 | `screenbar-toggle-auto.sh` | **ScreenBar: Toggle Auto Mode** | 切換硬體環境光感應自動補光模式 |
 | `screenbar-toggle-circadian.sh` | **ScreenBar: Toggle Circadian Mode** | 開關「日夜節律自動色溫」並立即套用當下時段色溫 |
+
+### 3. 驗證安裝
+
+```bash
+launchctl list | grep screenbar          # 應看到 2 個 io.github.dryden.* 服務
+tail -3 /tmp/screenbar-power.log          # 結尾應為 "started and connected to WindowServer"
+./screenbar-toggle-power.sh               # 燈應該會切換開關
+```
+
+接著鎖定螢幕（`⌃⌘Q`）：燈應該熄滅，解鎖後自動亮起。
+
+### 更新
+
+```bash
+cd ~/benq-screenbar-lite && git pull && ./_install.sh
+```
+
+### 解除安裝
+
+```bash
+cd ~/benq-screenbar-lite
+./_uninstall.sh            # 停止並移除背景服務
+./_uninstall.sh --purge    # 並一併刪除 ~/.screenbar_lite_state 與 log
+```
+
+之後從 Raycast 移除腳本目錄，並刪除下載的資料夾即可。
+
+### 行為說明
+
+- **節律模式與自動調光模式：** 硬體自動調光（`Toggle Auto Mode`）啟用期間，日夜節律模式不會覆蓋燈的設定。
+- **手動調整色溫**（`Temp Warmer` / `Temp Cooler`）會暫停節律模式，直到你再次開啟。
+- **狀態檔**位於 `~/.screenbar_lite_state`；log 位於 `/tmp/screenbar-power.log` 與 `/tmp/screenbar-circadian.log`。
+
+### 疑難排解
+
+| 症狀 | 解法 |
+| :--- | :--- |
+| `device not responding, is it plugged in?` | 檢查 USB 線。燈必須直接連接，或經由支援資料傳輸的 hub。 |
+| `device is stuck (FIFO full), unplug and replug the USB cable` | 燈的 MCU 不再接受指令（回傳 `C3 1F`）。拔掉 USB 線，等 5 秒後再插回去。 |
+| 安裝時出現 `clang not found` | 執行 `xcode-select --install`，再重新執行 `./_install.sh`。 |
+| 睡眠 / 喚醒時燈沒有反應 | 查看 `/tmp/screenbar-power.log`，並確認 `launchctl list \| grep screenbar` 有列出兩個服務。 |
+| Raycast 找不到指令 | 確認已在 Raycast 設定中加入腳本目錄，且腳本有執行權限（`chmod +x *.sh`）。 |
 
 ---
 
@@ -87,21 +141,23 @@ chmod +x _install.sh
 | **手動模式** | `sbChangeMode(1)` | `00 A7 FF FF FF 01 02 FF A6` | 切換為一般手動調光模式 |
 | **自動調光模式** | `sbChangeMode(2)` | `00 A7 FF 05 FF 02 02 FF AD` | 啟用環境光感測器自動調光 |
 | **我的最愛模式** | `sbChangeMode(3)` | `00 A7 FF FF FF 03 02 FF A8` | 讀取燈具內建的最愛記憶設定 |
-| **設定亮度與色溫** | `setSBBrightness` / `setSBColorTemp` | `00 A7 <B> <T> FF 04 02 FF <CK>` | `<B>`：`0x01`..`0x0F`（亮度 1..15）<br>`<T>`：`0x01`..`0x08`（色溫 `2700K`..`6500K`）<br>`<CK>`：Checksum 校驗碼（見下方公式） |
+| **設定亮度與色溫** | `setSBBrightness` / `setSBColorTemp` | `00 A7 <B> <T> FF 04 02 FF <CK>` | `<B>`：`0x01`..`0x0F`（亮度 1..15）<br>`<T>`：`0x01`..`0x08`（硬體定義：`6500K`..`2700K`，見下表）<br>`<CK>`：Checksum 校驗碼（見下方公式） |
 | **查詢燈具狀態** | `getHidDevice` | `00 B3 53 FF FF FF FF FF 01` | 回傳 8-byte 狀態報告 `57 ...` |
 | **韌體更新重置** ⚠️ | `sbFwReset` | `00 A3 04 FF FF FF FF FF A2` | **日常切勿發送**（會使晶片進入韌體更新模式並停止回應，需重新插拔 USB 才能恢復） |
 
 #### 色溫對照表（`<T>`）
+「Index」欄是腳本使用的邏輯索引（`1` = 最暖），「Hex」欄才是燈實際接受的值：**硬體索引是反向的**（`0x01` = `6500K`、`0x08` = `2700K`），`send_brightness_temp` 會以 `9 - index` 轉換。
+
 | 編號 | Hex 值 | 對應色溫 |
 | :---: | :---: | :---: |
-| `1` | `0x01` | `2700K`（最暖黃光） |
-| `2` | `0x02` | `3000K` |
-| `3` | `0x03` | `3500K` |
-| `4` | `0x04` | `4000K` |
-| `5` | `0x05` | `4500K` |
-| `6` | `0x06` | `5000K` |
-| `7` | `0x07` | `5700K` |
-| `8` | `0x08` | `6500K`（最冷白光） |
+| `1` | `0x08` | `2700K`（最暖黃光） |
+| `2` | `0x07` | `3000K` |
+| `3` | `0x06` | `3500K` |
+| `4` | `0x05` | `4000K` |
+| `5` | `0x04` | `4500K` |
+| `6` | `0x03` | `5000K` |
+| `7` | `0x02` | `5700K` |
+| `8` | `0x01` | `6500K`（最冷白光） |
 
 #### Checksum 校驗碼公式（`<CK>`）
 最後一個 byte（`B7`）為前面 `B0..B6` 加總後的最低 8-bit 值（`& 0xFF`）：
@@ -119,7 +175,7 @@ checksum = (0xA7 + B + T + 0xFF + 0x04 + 0x02 + 0xFF) & 0xFF
 
 > [!IMPORTANT]
 > **發送指令後務必同步讀取（Pop）Input Report！**
-> 若只單向發送 Output Report（`--send-output`）而沒有讀取 Input Report（`--read-input-report 0`），累積約 6～8 次指令後晶片內部的回應佇列就會塞滿（回傳 `C3 1F`），導致燈具不再執行後續指令。
+> 若只單向發送 Output Report（`--send-output`）而沒有讀取 Input Report（`--read-input-report 0`），累積約 6～8 次指令後晶片內部的回應佇列就會塞滿（回傳 `C3 1F`），導致燈具不再執行後續指令。一旦卡住，只有拔插 USB 重新供電才能恢復；腳本偵測到 `C3 1F` 時會直接提示。
 >
 > 在 [`_screenbar_lib.sh`](./_screenbar_lib.sh) 中，每次發送指令都會自動將佇列清空：
 > ```bash
