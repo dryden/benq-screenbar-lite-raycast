@@ -10,9 +10,13 @@ source "${SCRIPT_DIR}/_screenbar_lib.sh"
 # Never skip a sleep/wake event because another command holds the state lock
 LOCK_OPTIONAL=1
 
-load_state
-
 EVENT="$1"
+if [[ "$EVENT" == "wake" ]]; then
+  # Wait briefly for USB HID bus to settle after wake before querying/sending HID packets
+  sleep 0.5
+fi
+
+load_state
 
 case "$EVENT" in
   sleep|shutdown)
@@ -25,8 +29,6 @@ case "$EVENT" in
     send_hid_packet "0x00,0xA7,0xFF,0xFF,0xFF,0xFF,0x01,0xFF,0xA3" || echo "[$(date)] $EVENT: failed to power off lamp" >&2
     ;;
   wake)
-    # Wait briefly for USB HID bus to settle after wake
-    sleep 0.5
     if [[ "${WAS_ON_BEFORE_SLEEP:-2}" -eq 2 ]]; then
       POWER=2
       if ! send_hid_packet "0x00,0xA7,0xFF,0xFF,0xFF,0xFF,0x02,0xFF,0xA4"; then

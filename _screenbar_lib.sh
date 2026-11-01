@@ -70,7 +70,7 @@ load_state() {
   fi
   POWER="${POWER:-2}"           # 1=Off, 2=On
   BRIGHTNESS="${BRIGHTNESS:-8}" # 1..15 (0x01..0x0F)
-  COLORTEMP="${COLORTEMP:-5}"   # 1..8  (0x01..0x08: 2700K..6500K)
+  COLORTEMP="${COLORTEMP:-5}"   # 1..8  (logical: 1=2700K..8=6500K)
   MODE="${MODE:-1}"             # 1=Manual, 2=Auto, 3=Favorite
   CIRCADIAN="${CIRCADIAN:-1}"   # 1=Enabled (follow time of day), 0=Disabled
   WAS_ON_BEFORE_SLEEP="${WAS_ON_BEFORE_SLEEP:-2}" # 1=Off, 2=On before sleep

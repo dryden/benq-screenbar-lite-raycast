@@ -7,6 +7,19 @@
 static io_connect_t root_port = MACH_PORT_NULL;
 static NSString *lastEvent = @"";
 static NSTimeInterval lastEventTime = 0;
+static BOOL isScreenLocked = NO;
+
+static BOOL isSessionLocked(void) {
+    if (isScreenLocked) return YES;
+    CFDictionaryRef sessionDict = CGSessionCopyCurrentDictionary();
+    if (sessionDict) {
+        CFBooleanRef locked = CFDictionaryGetValue(sessionDict, CFSTR("CGSSessionScreenIsLocked"));
+        BOOL result = (locked && CFBooleanGetValue(locked));
+        CFRelease(sessionDict);
+        return result;
+    }
+    return NO;
+}
 
 static NSString *getPowerEventScriptPath(void) {
     NSString *execPath = [[NSBundle mainBundle] executablePath];
@@ -63,10 +76,12 @@ static void powerCallback(void *refCon, io_service_t service, natural_t messageT
             IOAllowPowerChange(root_port, (long)messageArgument);
             break;
         case kIOMessageSystemHasPoweredOn:
-            if (!CGDisplayIsAsleep(CGMainDisplayID())) {
-                runPowerScript(@"wake", @"kIOMessageSystemHasPoweredOn");
-            } else {
+            if (CGDisplayIsAsleep(CGMainDisplayID())) {
                 logMessage(@"Ignored kIOMessageSystemHasPoweredOn during DarkWake (display is asleep)");
+            } else if (isSessionLocked()) {
+                logMessage(@"Ignored kIOMessageSystemHasPoweredOn while screen is locked (waiting for unlock)");
+            } else {
+                runPowerScript(@"wake", @"kIOMessageSystemHasPoweredOn");
             }
             break;
         default:
@@ -112,25 +127,33 @@ static void powerCallback(void *refCon, io_service_t service, natural_t messageT
     runPowerScript(@"sleep", @"NSWorkspaceScreensDidSleepNotification");
 }
 - (void)screensDidWake:(NSNotification *)note {
-    runPowerScript(@"wake", @"NSWorkspaceScreensDidWakeNotification");
+    if (isSessionLocked()) {
+        logMessage(@"Ignored NSWorkspaceScreensDidWakeNotification while screen is locked (waiting for unlock)");
+    } else {
+        runPowerScript(@"wake", @"NSWorkspaceScreensDidWakeNotification");
+    }
 }
 - (void)willSleep:(NSNotification *)note {
     runPowerScript(@"sleep", @"NSWorkspaceWillSleepNotification");
 }
 - (void)didWake:(NSNotification *)note {
-    if (!CGDisplayIsAsleep(CGMainDisplayID())) {
-        runPowerScript(@"wake", @"NSWorkspaceDidWakeNotification");
-    } else {
+    if (CGDisplayIsAsleep(CGMainDisplayID())) {
         logMessage(@"Ignored NSWorkspaceDidWakeNotification during DarkWake (display is asleep)");
+    } else if (isSessionLocked()) {
+        logMessage(@"Ignored NSWorkspaceDidWakeNotification while screen is locked (waiting for unlock)");
+    } else {
+        runPowerScript(@"wake", @"NSWorkspaceDidWakeNotification");
     }
 }
 - (void)willPowerOff:(NSNotification *)note {
     runPowerScript(@"shutdown", @"NSWorkspaceWillPowerOffNotification");
 }
 - (void)screenLocked:(NSNotification *)note {
+    isScreenLocked = YES;
     runPowerScript(@"sleep", @"com.apple.screenIsLocked");
 }
 - (void)screenUnlocked:(NSNotification *)note {
+    isScreenLocked = NO;
     runPowerScript(@"wake", @"com.apple.screenIsUnlocked");
 }
 @end
