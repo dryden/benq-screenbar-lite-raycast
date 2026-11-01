@@ -3,8 +3,15 @@ set -e
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAUNCH_AGENTS_DIR="${HOME}/Library/LaunchAgents"
-CIRCADIAN_PLIST="${LAUNCH_AGENTS_DIR}/com.benq.screenbar-circadian.plist"
-POWER_PLIST="${LAUNCH_AGENTS_DIR}/com.benq.screenbar-power-monitor.plist"
+CIRCADIAN_LABEL="io.github.dryden.screenbar-circadian"
+POWER_LABEL="io.github.dryden.screenbar-power-monitor"
+CIRCADIAN_PLIST="${LAUNCH_AGENTS_DIR}/${CIRCADIAN_LABEL}.plist"
+POWER_PLIST="${LAUNCH_AGENTS_DIR}/${POWER_LABEL}.plist"
+# Legacy labels used by earlier versions (migrated automatically)
+for legacy in com.benq.screenbar-circadian com.benq.screenbar-power-monitor; do
+  launchctl bootout "gui/$(id -u)/${legacy}" 2>/dev/null || true
+  rm -f "${LAUNCH_AGENTS_DIR}/${legacy}.plist"
+done
 
 echo "==> [1/4] Checking hidapitester..."
 if ! command -v hidapitester >/dev/null 2>&1 && [[ ! -x "/opt/homebrew/bin/hidapitester" ]] && [[ ! -x "/usr/local/bin/hidapitester" ]]; then
@@ -17,6 +24,11 @@ if ! command -v hidapitester >/dev/null 2>&1 && [[ ! -x "/opt/homebrew/bin/hidap
   fi
 else
   echo "hidapitester is already installed."
+fi
+
+if ! xcode-select -p >/dev/null 2>&1 || ! command -v clang >/dev/null 2>&1; then
+  echo "Error: clang not found. Install Xcode Command Line Tools first: xcode-select --install"
+  exit 1
 fi
 
 echo "==> [2/4] Compiling native macOS power monitor (screenbar-power-monitor)..."
@@ -34,7 +46,7 @@ cat > "$CIRCADIAN_PLIST" <<EOF
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.benq.screenbar-circadian</string>
+    <string>${CIRCADIAN_LABEL}</string>
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
@@ -42,8 +54,11 @@ cat > "$CIRCADIAN_PLIST" <<EOF
     </array>
     <key>RunAtLoad</key>
     <true/>
-    <key>StartInterval</key>
-    <integer>900</integer>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
     <key>StandardOutPath</key>
     <string>/tmp/screenbar-circadian.log</string>
     <key>StandardErrorPath</key>
@@ -58,7 +73,7 @@ cat > "$POWER_PLIST" <<EOF
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.benq.screenbar-power-monitor</string>
+    <string>${POWER_LABEL}</string>
     <key>ProgramArguments</key>
     <array>
         <string>${REPO_DIR}/screenbar-power-monitor</string>
