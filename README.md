@@ -154,7 +154,7 @@ You can customize the hourly schedule in [`_screenbar_lib.sh`](./_screenbar_lib.
 
 If this project saved your BenQ ScreenBar Lite on Apple Silicon, feel free to buy me a coffee!
 
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/tldreview)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/dry4514)
 
 ---
 
