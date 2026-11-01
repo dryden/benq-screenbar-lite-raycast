@@ -2,7 +2,7 @@
 
 # Required parameters:
 # @raycast.schemaVersion 1
-# @raycast.title Toggle ScreenBar Circadian Mode
+# @raycast.title ScreenBar: Toggle Circadian Mode
 # @raycast.mode silent
 
 # Optional parameters:
@@ -18,9 +18,10 @@ load_state
 if [[ "$CIRCADIAN" -eq 1 ]]; then
   CIRCADIAN=0
   save_state
-  echo "ScreenBar Lite: 時間自動色溫已關閉 ⏸️"
+  echo "ScreenBar Lite: Circadian Mode OFF ⏸️"
 else
   CIRCADIAN=1
   save_state
+  release_lock
   "${SCRIPT_DIR}/_screenbar_circadian_worker.sh" --force
 fi

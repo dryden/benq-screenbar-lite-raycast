@@ -37,13 +37,13 @@ static void runPowerScript(NSString *event, NSString *source) {
     logMessage([NSString stringWithFormat:@"Triggering '%@' from %@", event, source]);
 
     NSTask *task = [[NSTask alloc] init];
-    task.launchPath = @"/bin/bash";
+    task.executableURL = [NSURL fileURLWithPath:@"/bin/bash"];
     task.arguments = @[getPowerEventScriptPath(), event];
-    @try {
-        [task launch];
+    NSError *error = nil;
+    if ([task launchAndReturnError:&error]) {
         [task waitUntilExit];
-    } @catch (NSException *e) {
-        logMessage([NSString stringWithFormat:@"Error launching script: %@", e]);
+    } else {
+        logMessage([NSString stringWithFormat:@"Error launching script: %@", error]);
     }
 }
 
@@ -137,19 +137,21 @@ static void powerCallback(void *refCon, io_service_t service, natural_t messageT
 
 int main(int argc, const char * argv[]) {
     @autoreleasepool {
-        // Catch SIGTERM / SIGINT (sent by launchd on shutdown / reboot / logout)
+        // Exit cleanly on SIGTERM / SIGINT. These are also sent by `launchctl bootout`
+        // (reinstall / uninstall), so they must NOT power the lamp off.
+        // Real shutdowns are handled by NSWorkspaceWillPowerOffNotification.
         signal(SIGTERM, SIG_IGN);
         signal(SIGINT, SIG_IGN);
         dispatch_source_t sigtermSource = dispatch_source_create(DISPATCH_SOURCE_TYPE_SIGNAL, SIGTERM, 0, dispatch_get_main_queue());
         dispatch_source_set_event_handler(sigtermSource, ^{
-            runPowerScript(@"shutdown", @"SIGTERM");
+            logMessage(@"Received SIGTERM, exiting");
             exit(0);
         });
         dispatch_resume(sigtermSource);
 
         dispatch_source_t sigintSource = dispatch_source_create(DISPATCH_SOURCE_TYPE_SIGNAL, SIGINT, 0, dispatch_get_main_queue());
         dispatch_source_set_event_handler(sigintSource, ^{
-            runPowerScript(@"shutdown", @"SIGINT");
+            logMessage(@"Received SIGINT, exiting");
             exit(0);
         });
         dispatch_resume(sigintSource);

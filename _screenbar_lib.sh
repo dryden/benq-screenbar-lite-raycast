@@ -16,7 +16,50 @@ STATE_FILE="${HOME}/.screenbar_lite_state"
 # Color temperature lookup table (1..8 -> Kelvin)
 TEMP_LABELS=("" "2700K" "3000K" "3500K" "4000K" "4500K" "5000K" "5700K" "6500K")
 
+LOCK_DIR="${STATE_FILE}.lock"
+LOCK_HELD=0
+
+acquire_lock() {
+  [[ "$LOCK_HELD" -eq 1 ]] && return 0
+  local i=0 mtime now
+  until mkdir "$LOCK_DIR" 2>/dev/null; do
+    # Break stale locks older than 10 seconds
+    mtime=$(stat -f %m "$LOCK_DIR" 2>/dev/null || echo 0)
+    now=$(date +%s)
+    if (( mtime > 0 && now - mtime > 10 )); then
+      rmdir "$LOCK_DIR" 2>/dev/null
+      continue
+    fi
+    i=$(( i + 1 ))
+    if (( i > 100 )); then
+      echo "ScreenBar Lite: could not acquire state lock ❌" >&2
+      exit 1
+    fi
+    sleep 0.05
+  done
+  LOCK_HELD=1
+  trap release_lock EXIT
+}
+
+release_lock() {
+  if [[ "$LOCK_HELD" -eq 1 ]]; then
+    rmdir "$LOCK_DIR" 2>/dev/null
+    LOCK_HELD=0
+  fi
+}
+
+# Print an error and abort (state is NOT saved, Raycast shows failure)
+die_hid() {
+  if [[ "${HID_NACK:-0}" -eq 1 ]]; then
+    echo "ScreenBar Lite: device is stuck (FIFO full), unplug and replug the USB cable ❌" >&2
+  else
+    echo "ScreenBar Lite: device not responding, is it plugged in? ❌" >&2
+  fi
+  exit 1
+}
+
 load_state() {
+  acquire_lock
   if [[ -f "$STATE_FILE" ]]; then
     # shellcheck disable=SC1090
     source "$STATE_FILE"
@@ -33,7 +76,8 @@ save_state() {
   if [[ "$POWER" -eq 2 ]]; then
     WAS_ON_BEFORE_SLEEP=2
   fi
-  cat > "$STATE_FILE" <<EOF
+  local tmp="${STATE_FILE}.tmp.$$"
+  cat > "$tmp" <<EOF
 POWER=$POWER
 BRIGHTNESS=$BRIGHTNESS
 COLORTEMP=$COLORTEMP
@@ -41,6 +85,7 @@ MODE=$MODE
 CIRCADIAN=$CIRCADIAN
 WAS_ON_BEFORE_SLEEP=$WAS_ON_BEFORE_SLEEP
 EOF
+  mv -f "$tmp" "$STATE_FILE"
 }
 
 # Calculate target ColorTemp index (1..8) based on current local hour (00..23)
@@ -60,13 +105,28 @@ get_circadian_temp() {
   fi
 }
 
+# Returns non-zero if the device could not be reached after HID_RETRIES attempts
 send_hid_packet() {
   local packet="$1"
-  "$HIDAPITESTER" --vidpid "$VIDPID" --quiet --open \
-    --length 9 --send-output "$packet" \
-    --timeout 40 --length 8 --read-input \
-    --length 9 --read-input-report 0 \
-    --close >/dev/null 2>&1
+  local attempt out
+  HID_NACK=0
+  for (( attempt = 1; attempt <= ${HID_RETRIES:-3}; attempt++ )); do
+    out=$("$HIDAPITESTER" --vidpid "$VIDPID" --quiet --open \
+      --length 9 --send-output "$packet" \
+      --timeout 40 --length 8 --read-input \
+      --length 9 --read-input-report 0 \
+      --close 2>&1)
+    if [[ $? -eq 0 ]]; then
+      if [[ "$out" == *"C3 1F"* ]]; then
+        # MCU FIFO full (NACK): it ignores commands until USB is power-cycled
+        HID_NACK=1
+        return 1
+      fi
+      return 0
+    fi
+    sleep 0.5
+  done
+  return 1
 }
 
 # Send dynamic Brightness + ColorTemp packet:
@@ -74,7 +134,7 @@ send_hid_packet() {
 # Checksum = (0xA7 + brightness + colorTemp + 0xFF + 0x04 + 0x02 + 0xFF) & 0xFF
 send_brightness_temp() {
   local b="$1"
-  local t="$2"
+  local t="$(( 9 - $2 ))" # Hardware index is inverted: 0x01 = 6500K (coolest), 0x08 = 2700K (warmest)
   local cksum=$(( (0xA7 + b + t + 0xFF + 0x04 + 0x02 + 0xFF) & 0xFF ))
   local packet
   packet=$(printf "0x00,0xA7,0x%02X,0x%02X,0xFF,0x04,0x02,0xFF,0x%02X" "$b" "$t" "$cksum")

@@ -2,7 +2,7 @@
 
 # Required parameters:
 # @raycast.schemaVersion 1
-# @raycast.title ScreenBar Color Temp Warmer
+# @raycast.title ScreenBar: Temp Warmer
 # @raycast.mode silent
 
 # Optional parameters:
@@ -21,8 +21,9 @@ if [[ "$COLORTEMP" -gt 1 ]]; then
 fi
 POWER=2
 MODE=1
+CIRCADIAN=0 # manual adjustment pauses Circadian Mode
 
-send_brightness_temp "$BRIGHTNESS" "$COLORTEMP"
+send_brightness_temp "$BRIGHTNESS" "$COLORTEMP" || die_hid
 save_state
 
 echo "ScreenBar Lite: Color Temp ${TEMP_LABELS[$COLORTEMP]} (Brightness ${BRIGHTNESS}/15) 🔥"

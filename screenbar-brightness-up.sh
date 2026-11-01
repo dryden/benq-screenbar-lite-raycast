@@ -2,7 +2,7 @@
 
 # Required parameters:
 # @raycast.schemaVersion 1
-# @raycast.title ScreenBar Brightness Up
+# @raycast.title ScreenBar: Brightness Up
 # @raycast.mode silent
 
 # Optional parameters:
@@ -21,7 +21,7 @@ fi
 POWER=2
 MODE=1
 
-send_brightness_temp "$BRIGHTNESS" "$COLORTEMP"
+send_brightness_temp "$BRIGHTNESS" "$COLORTEMP" || die_hid
 save_state
 
 echo "ScreenBar Lite: Brightness ${BRIGHTNESS}/15 (${TEMP_LABELS[$COLORTEMP]}) 🔆"
