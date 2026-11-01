@@ -17,7 +17,6 @@ fi
 TARGET_TEMP=$(get_circadian_temp)
 PREV_TEMP="$COLORTEMP"
 COLORTEMP="$TARGET_TEMP"
-save_state
 
 # Only send HID command if the lamp is currently ON (POWER=2)
 # (Sending 0xA7 brightness/temp when lamp is OFF would turn it ON)
@@ -27,6 +26,7 @@ if [[ "$POWER" -eq 2 && "$MODE" -ne 2 ]]; then
     send_brightness_temp "$BRIGHTNESS" "$COLORTEMP" || die_hid
   fi
 fi
+save_state
 
 if [[ "$1" == "--force" ]]; then
   echo "ScreenBar Lite: Circadian Mode ON 🌅 (${TEMP_LABELS[$COLORTEMP]})"

@@ -26,7 +26,8 @@ else
   # Currently OFF -> Turn ON
   POWER=2
   WAS_ON_BEFORE_SLEEP=2
-  if [[ "${CIRCADIAN:-1}" -eq 1 ]]; then
+  # In hardware Auto mode (MODE=2) only power on: a 0xA7 B/T packet would leave Auto mode
+  if [[ "${CIRCADIAN:-1}" -eq 1 && "${MODE:-1}" -ne 2 ]]; then
     COLORTEMP=$(get_circadian_temp)
     send_brightness_temp "$BRIGHTNESS" "$COLORTEMP" || die_hid
   else

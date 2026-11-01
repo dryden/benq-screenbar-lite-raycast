@@ -7,6 +7,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/_screenbar_lib.sh"
 
+# Never skip a sleep/wake event because another command holds the state lock
+LOCK_OPTIONAL=1
+
 load_state
 
 EVENT="$1"

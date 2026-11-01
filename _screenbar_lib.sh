@@ -32,6 +32,10 @@ acquire_lock() {
     fi
     i=$(( i + 1 ))
     if (( i > 100 )); then
+      if [[ "${LOCK_OPTIONAL:-0}" -eq 1 ]]; then
+        echo "ScreenBar Lite: state lock busy, continuing without it" >&2
+        return 0
+      fi
       echo "ScreenBar Lite: could not acquire state lock ❌" >&2
       exit 1
     fi
@@ -116,7 +120,9 @@ send_hid_packet() {
       --timeout 40 --length 8 --read-input \
       --length 9 --read-input-report 0 \
       --close 2>&1)
-    if [[ $? -eq 0 ]]; then
+    # NOTE: hidapitester exits 0 even when the device is missing; with --quiet it
+    # then prints nothing, so an empty output means the device could not be opened.
+    if [[ $? -eq 0 && -n "$out" ]]; then
       if [[ "$out" == *"C3 1F"* ]]; then
         # MCU FIFO full (NACK): it ignores commands until USB is power-cycled
         HID_NACK=1
