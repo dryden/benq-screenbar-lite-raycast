@@ -1,40 +1,38 @@
 # BenQ ScreenBar Lite — Native macOS CLI & Raycast Control
 
-A 100% native Apple Silicon (`arm64`) CLI & **Raycast Script Commands** suite for the **BenQ ScreenBar Lite** laptop monitor lamp (`VID: 0x04A5`, `PID: 0x2500`), completely replacing BenQ's discontinued Intel-only (`x86_64`) macOS app.
+[English](./README.md) | [繁體中文](./README.zh-TW.md)
 
-用純原生命令列工具（`hidapitester`）搭配 **Raycast Script Commands** 與輕量 Objective-C 電源守護程式，徹底取代明基官方早已停更的 Intel (`x86_64`) 版 `BenQ ScreenBar Lite.app`。
+A 100% native Apple Silicon (`arm64`) CLI & **Raycast Script Commands** suite for the **BenQ ScreenBar Lite** laptop monitor lamp (`VID: 0x04A5`, `PID: 0x2500`), completely replacing BenQ's discontinued Intel-only (`x86_64`) macOS app.
 
 ---
 
-## ✨ Features / 功能特色
+## ✨ Features
 
 - **100% Native Apple Silicon (`arm64`)**: Zero Rosetta 2 overhead, zero bloated background GUI.
 - **Raycast Script Commands**: Instant keyboard shortcuts for Power Toggle, Brightness Up/Down, Color Temperature Warmer/Cooler, Auto-Dimming Mode, and Circadian Mode.
-- **🌅 Circadian Mode (日夜節律自動色溫)**: Automatically shifts color temperature throughout the day (from `6500K` daylight focus in the morning down to `2700K` warm candlelight late at night). Manually adjusting color temperature automatically pauses Circadian Mode.
-- **🌙 Sleep / Screen Lock / Shutdown Auto Power-Off (睡眠、鎖屏、關機自動關燈)**: Includes a lightweight native Objective-C daemon (`screenbar-power-monitor`) hooked into `IOKit`, `CoreGraphics`, and `NSWorkspace` that turns the lamp off immediately when your Mac sleeps, locks, or shuts down, and restores it upon wake — with **macOS `DarkWake` (Power Nap) filtering** so background maintenance wakes never turn on your lamp at night.
+- **🌅 Circadian Mode**: Automatically shifts color temperature throughout the day (from `6500K` daylight focus in the morning down to `2700K` warm candlelight late at night). Manually adjusting color temperature automatically pauses Circadian Mode.
+- **🌙 Sleep / Screen Lock / Shutdown Auto Power-Off**: Includes a lightweight native Objective-C daemon (`screenbar-power-monitor`) hooked into `IOKit`, `CoreGraphics`, and `NSWorkspace` that turns the lamp off immediately when your Mac sleeps, locks, or shuts down, and restores it upon wake — with **macOS `DarkWake` (Power Nap) filtering** so background maintenance wakes never turn on your lamp at night.
 - **🔓 Reverse-Engineered USB HID Protocol**: Full documentation of the Weltrend MCU (`04A5:2500`) 9-byte HID report protocol, checksum algorithm, and internal outgoing FIFO queue behavior.
 
 ---
 
-## ⚡ Resource Footprint / 系統常駐資源消耗（實測對比）
+## ⚡ Resource Footprint
 
 Compared to BenQ's official Qt-based Intel (`x86_64`) app running under Rosetta 2, this native solution uses virtually zero system resources:
 
-與明基官方透過 Rosetta 2 轉譯、使用舊版 Qt 框架打包的 `BenQ ScreenBar Lite.app` 相比，本專案的系統資源消耗幾乎為零：
-
-| Metric / 指標 | Official `BenQ ScreenBar Lite.app` | This Project (`screenbar-power-monitor` + LaunchAgents) |
+| Metric | Official `BenQ ScreenBar Lite.app` | This Project (`screenbar-power-monitor` + LaunchAgents) |
 | :--- | :---: | :---: |
-| **Architecture / 架構** | Intel `x86_64` (Rosetta 2 translation) | **Native `arm64` (Apple Silicon)** |
-| **CPU Usage / CPU 佔用** | `0.3% – 1.5%` (continuous USB polling) | **`0.0%`** (100% kernel event-driven via `CFRunLoop`, zero polling) |
-| **RAM (`phys_footprint`) / 記憶體** | `~120 MB – 180 MB` | **`~7.0 MB` (`7,201 KB`)** |
-| **Disk Size / 檔案大小** | `~45 MB` (`.app` bundle + Qt frameworks) | **`~55 KB`** (compiled native binary + shell scripts) |
-| **Circadian Worker / 日夜節律排程** | Not supported / 無此功能 | **`0 MB` resident** (triggered by `launchd` once every 15 mins for `~50ms`, then exits) |
+| **Architecture** | Intel `x86_64` (Rosetta 2 translation) | **Native `arm64` (Apple Silicon)** |
+| **CPU Usage** | `0.3% – 1.5%` (continuous USB polling) | **`0.0%`** (100% kernel event-driven via `CFRunLoop`, zero polling) |
+| **RAM (`phys_footprint`)** | `~120 MB – 180 MB` | **`~7.0 MB` (`7,201 KB`)** |
+| **Disk Size** | `~45 MB` (`.app` bundle + Qt frameworks) | **`~55 KB`** (compiled native binary + shell scripts) |
+| **Circadian Worker** | Not supported | **`0 MB` resident** (triggered by `launchd` once every 15 mins for `~50ms`, then exits) |
 
 ---
 
-## 🚀 Quick Start / 快速安裝
+## 🚀 Quick Start
 
-### 1. Clone & Run Installer / 下載並執行安裝腳本
+### 1. Clone & Run Installer
 
 ```bash
 git clone https://github.com/dryden/benq-screenbar-lite-raycast.git /Applications/ScreenBarLite-Raycast
@@ -50,7 +48,9 @@ What `_install.sh` does:
    - `com.benq.screenbar-circadian` (updates color temperature every 15 minutes when lamp is ON)
    - `com.benq.screenbar-power-monitor` (turns lamp OFF on sleep/lock/shutdown and restores on wake)
 
-### 2. Add to Raycast / 加入 Raycast
+To uninstall the background services at any time, run `./_uninstall.sh`.
+
+### 2. Add to Raycast
 
 1. Open **Raycast** -> **Settings** (`⌘ ,`) -> **Extensions**.
 2. Click **Add More** (`+`) -> **Add Script Directory**.
@@ -69,7 +69,7 @@ What `_install.sh` does:
 
 ---
 
-## 🔬 Reverse-Engineered USB HID Protocol / 硬體通訊協定解析
+## 🔬 Reverse-Engineered USB HID Protocol
 
 ### Hardware Identifiers
 - **Vendor ID (`idVendor`)**: `0x04A5` (`1189`, Acer / BenQ / Weltrend)
@@ -132,21 +132,21 @@ Every time the host sends an Output Report (`0xA7` or `0xB3`), the Weltrend MCU 
 
 ---
 
-## 🌅 Circadian Schedule / 日夜節律色溫時間表
+## 🌅 Circadian Schedule
 
 You can customize the hourly schedule in [`_screenbar_lib.sh`](./_screenbar_lib.sh) (`get_circadian_temp`):
 
 | Time Window | Color Temp | Index | Description |
 | :--- | :---: | :---: | :--- |
-| `07:00 – 07:59` | `4000K` | `4` | Morning soft warm light (晨間柔和) |
-| `08:00 – 08:59` | `5000K` | `6` | Morning wake-up light (早晨清醒) |
-| `09:00 – 11:59` | `6500K` | `8` | High-focus cool daylight (上午專注白光) |
-| `12:00 – 15:59` | `5700K` | `7` | Natural afternoon daylight (午後自然日光) |
-| `16:00 – 17:59` | `5000K` | `6` | Comfortable late-afternoon light (下午舒適光) |
-| `18:00 – 19:59` | `4000K` | `4` | Evening warm transition (傍晚微暖光) |
-| `20:00 – 21:59` | `3500K` | `3` | Nighttime relaxing warm light (夜間放鬆暖光) |
-| `22:00 – 22:59` | `3000K` | `2` | Pre-sleep warm yellow light (睡前暖黃光) |
-| `23:00 – 06:59` | `2700K` | `1` | Late-night candlelight (深夜極暖燭光) |
+| `07:00 – 07:59` | `4000K` | `4` | Morning soft warm light |
+| `08:00 – 08:59` | `5000K` | `6` | Morning wake-up light |
+| `09:00 – 11:59` | `6500K` | `8` | High-focus cool daylight |
+| `12:00 – 15:59` | `5700K` | `7` | Natural afternoon daylight |
+| `16:00 – 17:59` | `5000K` | `6` | Comfortable late-afternoon light |
+| `18:00 – 19:59` | `4000K` | `4` | Evening warm transition |
+| `20:00 – 21:59` | `3500K` | `3` | Nighttime relaxing warm light |
+| `22:00 – 22:59` | `3000K` | `2` | Pre-sleep warm yellow light |
+| `23:00 – 06:59` | `2700K` | `1` | Late-night candlelight |
 
 ---
 
