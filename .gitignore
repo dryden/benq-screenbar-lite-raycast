@@ -1,0 +1,4 @@
+.DS_Store
+screenbar-power-monitor
+*.o
+*.dSYM/
