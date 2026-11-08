@@ -210,6 +210,14 @@ You can customize the hourly schedule in [`_screenbar_lib.sh`](./_screenbar_lib.
 
 ---
 
+## 📝 Release Notes
+
+### 2026-11-08 — Reliable Auto Power-Off on Shutdown / Restart / Logout
+- **Fixed lamp staying on after shutting down the Mac**: Previously, when macOS shut down or restarted, the background service exited immediately upon receiving system termination signals before it could turn the lamp off. It now properly intercepts macOS shutdown, restart, and logout events (`IOKit` power-off/restart notifications, Cocoa app termination hooks, and `launchd` stop signals) to turn the lamp off first.
+- **No flicker when updating/reinstalling**: Re-running `./_install.sh` to update the service still restarts the background monitor cleanly without turning your lamp off.
+
+---
+
 ## ☕ Support
 
 If this project saved your BenQ ScreenBar Lite on Apple Silicon, feel free to buy me a coffee!
