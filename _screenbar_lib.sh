@@ -130,7 +130,7 @@ send_hid_packet() {
       fi
       return 0
     fi
-    sleep 0.5
+    sleep "${HID_RETRY_DELAY:-0.5}"
   done
   return 1
 }

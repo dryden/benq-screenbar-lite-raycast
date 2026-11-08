@@ -7,7 +7,11 @@
 static io_connect_t root_port = MACH_PORT_NULL;
 static NSString *lastEvent = @"";
 static NSTimeInterval lastEventTime = 0;
+static NSTimeInterval lastShutdownTime = 0;
 static BOOL isScreenLocked = NO;
+static BOOL isRunningScript = NO;
+static BOOL pendingExitAfterScript = NO;
+static NSString * const kSkipShutdownFlagPath = @"/tmp/screenbar-skip-shutdown";
 
 static BOOL isSessionLocked(void) {
     if (isScreenLocked) return YES;
@@ -39,16 +43,46 @@ static void logMessage(NSString *msg) {
     }
 }
 
+static BOOL shouldSkipShutdownOnReload(void) {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    if (![fm fileExistsAtPath:kSkipShutdownFlagPath]) {
+        return NO;
+    }
+    NSDictionary *attrs = [fm attributesOfItemAtPath:kSkipShutdownFlagPath error:nil];
+    NSDate *modDate = attrs[NSFileModificationDate];
+    [fm removeItemAtPath:kSkipShutdownFlagPath error:nil];
+    if (modDate && fabs([modDate timeIntervalSinceNow]) < 15.0) {
+        return YES;
+    }
+    return NO;
+}
+
+static BOOL hasRecentShutdown(void) {
+    if (lastShutdownTime <= 0) return NO;
+    NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+    return (now - lastShutdownTime) < 15.0;
+}
+
 static void runPowerScript(NSString *event, NSString *source) {
     NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+    if (hasRecentShutdown() && ([event isEqualToString:@"shutdown"] || [event isEqualToString:@"sleep"])) {
+        logMessage([NSString stringWithFormat:@"Ignored '%@' from %@ (shutdown already handled)", event, source]);
+        return;
+    }
     if ([event isEqualToString:lastEvent] && (now - lastEventTime) < 2.0) {
         logMessage([NSString stringWithFormat:@"Ignored duplicate '%@' from %@", event, source]);
         return;
+    }
+    if ([event isEqualToString:@"shutdown"]) {
+        lastShutdownTime = now;
+    } else if ([event isEqualToString:@"wake"]) {
+        lastShutdownTime = 0;
     }
     lastEvent = [event copy];
     lastEventTime = now;
     logMessage([NSString stringWithFormat:@"Triggering '%@' from %@", event, source]);
 
+    isRunningScript = YES;
     NSTask *task = [[NSTask alloc] init];
     task.executableURL = [NSURL fileURLWithPath:@"/bin/bash"];
     task.arguments = @[getPowerEventScriptPath(), event];
@@ -58,6 +92,26 @@ static void runPowerScript(NSString *event, NSString *source) {
     } else {
         logMessage([NSString stringWithFormat:@"Error launching script: %@", error]);
     }
+    isRunningScript = NO;
+
+    if (pendingExitAfterScript) {
+        logMessage(@"Power script completed, exiting after deferred termination signal");
+        exit(0);
+    }
+}
+
+static void handleTerminationSignal(NSString *sigName) {
+    if (shouldSkipShutdownOnReload()) {
+        logMessage([NSString stringWithFormat:@"Received %@ during service reload, exiting without powering off", sigName]);
+        exit(0);
+    }
+    if (isRunningScript) {
+        logMessage([NSString stringWithFormat:@"Received %@ while power script is in flight, deferring exit until completion", sigName]);
+        pendingExitAfterScript = YES;
+        return;
+    }
+    runPowerScript(@"shutdown", sigName);
+    exit(0);
 }
 
 static void displayCallback(CGDirectDisplayID display, CGDisplayChangeSummaryFlags flags, void *userInfo) {
@@ -69,10 +123,19 @@ static void displayCallback(CGDirectDisplayID display, CGDisplayChangeSummaryFla
 static void powerCallback(void *refCon, io_service_t service, natural_t messageType, void *messageArgument) {
     switch (messageType) {
         case kIOMessageCanSystemSleep:
+        case kIOMessageCanSystemPowerOff:
             IOAllowPowerChange(root_port, (long)messageArgument);
             break;
         case kIOMessageSystemWillSleep:
             runPowerScript(@"sleep", @"kIOMessageSystemWillSleep");
+            IOAllowPowerChange(root_port, (long)messageArgument);
+            break;
+        case kIOMessageSystemWillPowerOff:
+            runPowerScript(@"shutdown", @"kIOMessageSystemWillPowerOff");
+            IOAllowPowerChange(root_port, (long)messageArgument);
+            break;
+        case kIOMessageSystemWillRestart:
+            runPowerScript(@"shutdown", @"kIOMessageSystemWillRestart");
             IOAllowPowerChange(root_port, (long)messageArgument);
             break;
         case kIOMessageSystemHasPoweredOn:
@@ -94,6 +157,8 @@ static void powerCallback(void *refCon, io_service_t service, natural_t messageT
 
 @implementation AppDelegate
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
+    [[NSFileManager defaultManager] removeItemAtPath:kSkipShutdownFlagPath error:nil];
+    [[NSProcessInfo processInfo] disableSuddenTermination];
     logMessage(@"screenbar-power-monitor started and connected to WindowServer");
 
     // 1. Register IOKit System Power Callback
@@ -148,6 +213,19 @@ static void powerCallback(void *refCon, io_service_t service, natural_t messageT
 - (void)willPowerOff:(NSNotification *)note {
     runPowerScript(@"shutdown", @"NSWorkspaceWillPowerOffNotification");
 }
+- (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender {
+    if (shouldSkipShutdownOnReload()) {
+        logMessage(@"Received applicationShouldTerminate during service reload, exiting without powering off");
+    } else {
+        runPowerScript(@"shutdown", @"applicationShouldTerminate");
+    }
+    return NSTerminateNow;
+}
+- (void)applicationWillTerminate:(NSNotification *)notification {
+    if (!hasRecentShutdown()) {
+        runPowerScript(@"shutdown", @"applicationWillTerminate");
+    }
+}
 - (void)screenLocked:(NSNotification *)note {
     isScreenLocked = YES;
     runPowerScript(@"sleep", @"com.apple.screenIsLocked");
@@ -160,24 +238,29 @@ static void powerCallback(void *refCon, io_service_t service, natural_t messageT
 
 int main(int argc, const char * argv[]) {
     @autoreleasepool {
-        // Exit cleanly on SIGTERM / SIGINT. These are also sent by `launchctl bootout`
-        // (reinstall / uninstall), so they must NOT power the lamp off.
-        // Real shutdowns are handled by NSWorkspaceWillPowerOffNotification.
+        // Catch SIGTERM / SIGINT / SIGHUP sent by launchd/loginwindow during shutdown / reboot / logout.
+        // When `_install.sh` reloads the LaunchAgent, it touches `/tmp/screenbar-skip-shutdown`
+        // so that reinstalls do not turn the lamp off.
         signal(SIGTERM, SIG_IGN);
         signal(SIGINT, SIG_IGN);
+        signal(SIGHUP, SIG_IGN);
         dispatch_source_t sigtermSource = dispatch_source_create(DISPATCH_SOURCE_TYPE_SIGNAL, SIGTERM, 0, dispatch_get_main_queue());
         dispatch_source_set_event_handler(sigtermSource, ^{
-            logMessage(@"Received SIGTERM, exiting");
-            exit(0);
+            handleTerminationSignal(@"SIGTERM");
         });
         dispatch_resume(sigtermSource);
 
         dispatch_source_t sigintSource = dispatch_source_create(DISPATCH_SOURCE_TYPE_SIGNAL, SIGINT, 0, dispatch_get_main_queue());
         dispatch_source_set_event_handler(sigintSource, ^{
-            logMessage(@"Received SIGINT, exiting");
-            exit(0);
+            handleTerminationSignal(@"SIGINT");
         });
         dispatch_resume(sigintSource);
+
+        dispatch_source_t sighupSource = dispatch_source_create(DISPATCH_SOURCE_TYPE_SIGNAL, SIGHUP, 0, dispatch_get_main_queue());
+        dispatch_source_set_event_handler(sighupSource, ^{
+            handleTerminationSignal(@"SIGHUP");
+        });
+        dispatch_resume(sighupSource);
 
         NSApplication *app = [NSApplication sharedApplication];
         [app setActivationPolicy:NSApplicationActivationPolicyAccessory];

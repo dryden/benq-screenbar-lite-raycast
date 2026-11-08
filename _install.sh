@@ -9,8 +9,9 @@ CIRCADIAN_PLIST="${LAUNCH_AGENTS_DIR}/${CIRCADIAN_LABEL}.plist"
 POWER_PLIST="${LAUNCH_AGENTS_DIR}/${POWER_LABEL}.plist"
 # Legacy labels used by earlier versions (migrated automatically)
 for legacy in com.benq.screenbar-circadian com.benq.screenbar-power-monitor; do
+  touch /tmp/screenbar-skip-shutdown
   launchctl bootout "gui/$(id -u)/${legacy}" 2>/dev/null || true
-  rm -f "${LAUNCH_AGENTS_DIR}/${legacy}.plist"
+  rm -f "${LAUNCH_AGENTS_DIR}/${legacy}.plist" /tmp/screenbar-skip-shutdown
 done
 
 echo "==> [1/4] Checking hidapitester..."
@@ -82,6 +83,8 @@ cat > "$POWER_PLIST" <<EOF
     <true/>
     <key>KeepAlive</key>
     <true/>
+    <key>ExitTimeOut</key>
+    <integer>10</integer>
     <key>StandardOutPath</key>
     <string>/tmp/screenbar-power.log</string>
     <key>StandardErrorPath</key>
@@ -90,9 +93,11 @@ cat > "$POWER_PLIST" <<EOF
 </plist>
 EOF
 
+touch /tmp/screenbar-skip-shutdown
 launchctl bootout "gui/$(id -u)" "$CIRCADIAN_PLIST" 2>/dev/null || true
 launchctl bootout "gui/$(id -u)" "$POWER_PLIST" 2>/dev/null || true
 sleep 1
+rm -f /tmp/screenbar-skip-shutdown
 launchctl bootstrap "gui/$(id -u)" "$CIRCADIAN_PLIST"
 launchctl bootstrap "gui/$(id -u)" "$POWER_PLIST"
 
